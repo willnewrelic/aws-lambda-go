@@ -70,6 +70,22 @@ func validateReturns(handler reflect.Type) error {
 	return nil
 }
 
+type traceContextKey struct{}
+
+type HandlerTrace interface {
+	RequestObject(interface{})
+	ResponseObject(interface{})
+}
+
+func WithHandlerTrace(ctx context.Context, trace HandlerTrace) context.Context {
+	return context.WithValue(ctx, traceContextKey{}, trace)
+}
+
+func contextHandlerTrace(ctx context.Context) HandlerTrace {
+	trace, _ := ctx.Value(traceContextKey{}).(HandlerTrace)
+	return trace
+}
+
 // NewHandler creates a base lambda handler from the given handler function. The
 // returned Handler performs JSON deserialization and deserialization, and
 // delegates to the input handler function.  The handler function parameter must
@@ -95,6 +111,9 @@ func NewHandler(handlerFunc interface{}) Handler {
 	}
 
 	return lambdaHandler(func(ctx context.Context, payload []byte) (interface{}, error) {
+
+		trace := contextHandlerTrace(ctx)
+
 		// construct arguments
 		var args []reflect.Value
 		if takesContext {
@@ -106,6 +125,10 @@ func NewHandler(handlerFunc interface{}) Handler {
 
 			if err := json.Unmarshal(payload, event.Interface()); err != nil {
 				return nil, err
+			}
+
+			if nil != trace {
+				trace.RequestObject(event.Elem().Interface())
 			}
 
 			args = append(args, event.Elem())
@@ -123,6 +146,9 @@ func NewHandler(handlerFunc interface{}) Handler {
 		var val interface{}
 		if len(response) > 1 {
 			val = response[0].Interface()
+			if nil != trace {
+				trace.ResponseObject(val)
+			}
 		}
 
 		return val, err
