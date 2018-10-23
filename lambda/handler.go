@@ -75,7 +75,10 @@ func validateReturns(handler reflect.Type) error {
 // delegates to the input handler function.  The handler function parameter must
 // satisfy the rules documented by Start.  If handlerFunc is not a valid
 // handler, the returned Handler simply reports the validation error.
-func NewHandler(handlerFunc interface{}) Handler {
+func NewHandler(handlerFunc interface{},
+	requestCallback func(context.Context, interface{}),
+	responseCallback func(context.Context, interface{}),
+) Handler {
 	if handlerFunc == nil {
 		return errorHandler(fmt.Errorf("handler is nil"))
 	}
@@ -108,6 +111,10 @@ func NewHandler(handlerFunc interface{}) Handler {
 				return nil, err
 			}
 
+			if nil != requestCallback {
+				requestCallback(ctx, event.Elem().Interface())
+			}
+
 			args = append(args, event.Elem())
 		}
 
@@ -123,6 +130,10 @@ func NewHandler(handlerFunc interface{}) Handler {
 		var val interface{}
 		if len(response) > 1 {
 			val = response[0].Interface()
+
+			if nil != responseCallback {
+				responseCallback(ctx, val)
+			}
 		}
 
 		return val, err
